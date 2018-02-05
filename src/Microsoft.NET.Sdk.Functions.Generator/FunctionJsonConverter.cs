@@ -13,7 +13,7 @@ namespace MakeFunctionJson
         private string _outputPath;
         private readonly ILogger _logger;
         private readonly IDictionary<string, MethodInfo> _functionNamesSet;
-        private readonly BuildArtifactsLog _buildArtifactsLog;
+        private readonly IList<MethodInfo> _skipAutoGen;
 
         private static readonly IEnumerable<string> _functionsArtifacts = new[]
         {
@@ -46,7 +46,7 @@ namespace MakeFunctionJson
                 _outputPath = Path.Combine(Directory.GetCurrentDirectory(), _outputPath);
             }
             _functionNamesSet = new Dictionary<string, MethodInfo>(StringComparer.OrdinalIgnoreCase);
-            _buildArtifactsLog = new BuildArtifactsLog(logger, _outputPath);
+            _skipAutoGen = new List<MethodInfo>();
         }
 
         /// <summary>
@@ -66,13 +66,7 @@ namespace MakeFunctionJson
             try
             {
                 this._functionNamesSet.Clear();
-                if (!_buildArtifactsLog.TryClearBuildArtifactsLog())
-                {
-                    _logger.LogError("Unable to clean build artifacts file.");
-                    return false;
-                }
 
-                CleanOutputPath();
                 CopyFunctionArtifacts();
 
                 return TryGenerateFunctionJsons();
@@ -120,6 +114,11 @@ namespace MakeFunctionJson
                         _logger.LogError(error);
                         yield return null;
                     }
+                    else if (method.HasSkipAutoGenAttribute())
+                    {
+                        _skipAutoGen.Add(method);
+                        continue;
+                    }
                     else if (method.IsWebJobsSdkMethod())
                     {
                         var functionName = method.GetSdkFunctionName();
@@ -127,8 +126,7 @@ namespace MakeFunctionJson
                         var path = Path.Combine(_outputPath, artifactName);
                         var relativeAssemblyPath = PathUtility.MakeRelativePath(Path.Combine(_outputPath, "dummyFunctionName"), type.Assembly.Location);
                         var functionJson = method.ToFunctionJson(relativeAssemblyPath);
-                        if (CheckAppSettingsAndFunctionName(functionJson, method) &&
-                            _buildArtifactsLog.TryAddBuildArtifact(artifactName))
+                        if (CheckAppSettingsAndFunctionName(functionJson, method))
                         {
                             yield return (functionJson, new FileInfo(path));
                         }
@@ -160,11 +158,22 @@ namespace MakeFunctionJson
         {
             var assembly = Assembly.LoadFrom(_assemblyPath);
             var functions = GenerateFunctions(assembly.GetExportedTypes()).ToList();
-            foreach (var function in functions.Where(f => f.HasValue && !f.Value.outputFile.Exists).Select(f => f.Value))
+            CleanOutputPath();
+
+            if (functions.All(f => f.HasValue))
             {
-                function.schema.Serialize(function.outputFile.FullName);
+                // If all functions have a value, that means there were no errors
+                foreach (var (schema, outputFile) in functions.Select(f => f.Value))
+                {
+                    schema.Serialize(outputFile.FullName);
+                }
+                return true;
             }
-            return functions.All(f => f.HasValue);
+            else
+            {
+                // Otherwise, skip serialization and return false to indicate a build error.
+                return false;
+            }
         }
 
         private bool CheckAppSettingsAndFunctionName(FunctionJsonSchema functionJson, MethodInfo method)
@@ -239,7 +248,7 @@ namespace MakeFunctionJson
             Directory.GetDirectories(_outputPath)
                 .Select(d => Path.Combine(d, "function.json"))
                 .Where(File.Exists)
-                .Where(f => _buildArtifactsLog.IsBuildArtifact(f.Replace(_outputPath, string.Empty)))
+                .Where(f => !_skipAutoGen.Any(m => m.GetSdkFunctionName().Equals(functionNameFromPath(f), StringComparison.OrdinalIgnoreCase)))
                 .Select(Path.GetDirectoryName)
                 .ToList()
                 .ForEach(directory =>
@@ -253,6 +262,8 @@ namespace MakeFunctionJson
                         _logger.LogWarning($"Unable to clean directory {directory}.");
                     }
                 });
+
+            string functionNameFromPath(string path) => Path.GetDirectoryName(path).Replace(_outputPath, string.Empty).Trim(Path.DirectorySeparatorChar);
         }
     }
 }

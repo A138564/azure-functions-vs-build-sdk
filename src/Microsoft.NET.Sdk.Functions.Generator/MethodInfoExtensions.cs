@@ -175,5 +175,9 @@ namespace MakeFunctionJson
                 return false;
             }
         }
+
+        public static bool HasSkipAutoGenAttribute(this MethodInfo method) =>
+             method.GetCustomAttributes().Any(a => a.GetType().Name == "SkipAutoGenAttribute");
+        
     }
 }

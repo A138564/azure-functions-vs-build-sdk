@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
     <PackageName>Microsoft.NET.Sdk.Functions</PackageName>
-    <PackageVersion>1.0.7</PackageVersion>
+    <PackageVersion>1.0.11</PackageVersion>
     <AssemblyOriginatorKeyFile>PublicKey.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>false</SignAssembly>
     <DelaySign>true</DelaySign>
@@ -25,6 +25,16 @@
 
   <Target Name="PackReferenceAssemblies" AfterTargets="Build">
     <ItemGroup>
+      <!-- Assembly with build related attributes -->
+      <None Include="bin\Release\net46\Microsoft.NET.Sdk.Functions.dll">
+        <Pack>true</Pack>
+        <PackagePath>lib\net46\</PackagePath>
+      </None>
+      <None Include="bin\Release\netstandard2.0\Microsoft.NET.Sdk.Functions.dll">
+        <Pack>true</Pack>
+        <PackagePath>lib\netstandard2.0\</PackagePath>
+      </None>
+
       <!-- MSBuild task assemblies -->
       <None Include="$(FunctionsBuildTaskOutputPath)\net46\Microsoft.NET.Sdk.Functions.MSBuild.dll">
         <Pack>true</Pack>
@@ -65,18 +75,23 @@
   </Target>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <PackageReference Include="Newtonsoft.Json" Version="[10.0.3]" />
     <PackageReference Include="Microsoft.Azure.WebJobs" Version="[3.0.0-beta4]" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions" Version="[3.0.0-beta4]" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Http" Version="[3.0.0-beta4]" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net46'">
-    <PackageReference Include="Newtonsoft.Json" Version="[9.0.1]" />
     <PackageReference Include="Microsoft.Azure.WebJobs" Version="[2.1.0-beta4]" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions" Version="[2.1.0-beta4]" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Http" Version="[1.0.0-beta4]" />
     <PackageReference Include="System.ValueTuple" Version="4.3.0" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(TargetFramework)' == 'net46' And '$(IgnoreNewtonsoftJsonVersion)' != 'true'">
+    <PackageReference Include="Newtonsoft.Json" Version="[9.0.1]" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' And '$(IgnoreNewtonsoftJsonVersion)' != 'true'">
+    <PackageReference Include="Newtonsoft.Json" Version="[10.0.3]" />
+  </ItemGroup>
 </Project>
